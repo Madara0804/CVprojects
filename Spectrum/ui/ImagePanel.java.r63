@@ -1,0 +1,223 @@
+import java.awt.BorderLayout;
+import java.awt.FlowLayout;
+import java.awt.Image;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.io.File;
+import javax.swing.*;
+import javax.swing.filechooser.FileNameExtensionFilter;
+import java.awt.image.BufferedImage;
+import javax.imageio.ImageIO;
+import java.util.ArrayList;
+import java.awt.Color;
+
+/**
+ * The Image Panel for the main JFrame of the GUI. Allows the user
+ * to load in an image.
+ * 
+ * @author Gianna Casolara
+ *
+ */
+
+public class ImagePanel extends JPanel
+{
+	private static final long serialVersionUID = 1L;
+	JButton button;
+	JButton posterizeButton;
+	JLabel label;
+	JPanel southPanel;
+	JPanel centerPanel;
+	ImageIcon image;
+	String imagePath;
+	
+	/**
+	 * Image Panel Constructor.
+	 */
+	public ImagePanel()
+	{
+
+		this.setLayout(new BorderLayout());
+
+		southPanel = new JPanel();
+		button = new JButton("Browse");
+		southPanel.add(button);
+		posterizeButton = new JButton("Posterize");
+		southPanel.add(posterizeButton);
+		centerPanel = new JPanel();
+		label = new JLabel();
+		centerPanel.add(label);
+
+		add(southPanel, BorderLayout.SOUTH);
+		add(label, BorderLayout.CENTER);
+		posterizeButton.addActionListener(new ActionListener()
+		{
+			public void actionPerformed(ActionEvent e)
+			{
+				if (imagePath == null) return;
+				JFrame frame = new JFrame();
+				
+				frame.getContentPane().setLayout(new FlowLayout());
+				frame.getContentPane().add(new JLabel(new ImageIcon(ImageDriver.resize(posterize(), 4))));
+				
+				frame.pack();
+				frame.setVisible(true);
+			}
+		});
+
+		button.addActionListener(new ActionListener()
+		{
+
+			public void actionPerformed(ActionEvent e)
+			{
+
+				JFileChooser file = new JFileChooser();
+				file.setCurrentDirectory(new File(System.getProperty("user.home")));
+
+				// filter the files to only files that are images
+				FileNameExtensionFilter filter = 
+						new FileNameExtensionFilter("*.Images", "jpg", "gif", "png");
+				file.addChoosableFileFilter(filter);
+				int result = file.showSaveDialog(null);
+
+				// if the user clicks on save while choosing a file
+				if (result == JFileChooser.APPROVE_OPTION)
+				{
+					File selectedFile = file.getSelectedFile();
+					String path = selectedFile.getAbsolutePath();
+					imagePath = path;
+					label.setHorizontalAlignment(SwingConstants.CENTER);
+					image = resizeImage(path);
+					label.setIcon(image);
+				}
+				// if the user clicks on cancel while choosing a file
+
+				else if (result == JFileChooser.CANCEL_OPTION)
+				{
+					System.out.println("No File Select");
+				}
+			}
+		});
+
+		// setLayout(null);
+		setVisible(true);
+	}
+
+	/**
+	 * Method used to resize image before loading it in.
+	 * 
+	 * @param imagePath string
+	 * @return image
+	 */
+	public ImageIcon resizeImage(String imagePath)
+	{
+		// I would like to fix the proportions used so that the image is still the same
+		// proportions
+		// as when loaded and not just resized so it isnt distorted
+
+		ImageIcon myImage = new ImageIcon(imagePath);
+		Image img = myImage.getImage();
+		/*
+		 * int imgWidth = img.getWidth(null); int imgHeight = img.getHeight(null);
+		 * double scale;
+		 * 
+		 * if(imgWidth > imgHeight) { scale = imgWidth / imgHeight; } else { scale =
+		 * imgHeight / imgWidth; }
+		 * 
+		 */
+		int imageHeight = img.getHeight(null);
+		int imageWidth = img.getWidth(null);
+		int labelWidth = label.getWidth();
+		int labelHeight = label.getHeight();
+		
+		int actualWidth = label.getWidth();
+		int actualHeight = label.getHeight();
+		
+		double imageRatio = ((double) imageWidth) / imageHeight;
+		
+		int scaledHeight = (int) Math.round(labelWidth / imageRatio);
+		int scaledWidth = (int) Math.round(imageRatio * labelHeight);
+		
+		if (scaledHeight > labelHeight) 
+		{
+			
+			actualWidth = scaledWidth;
+			actualHeight = (int)Math.round(scaledWidth / imageRatio);
+			
+		} else if (scaledWidth > labelWidth) 
+		{
+			
+			actualHeight = scaledHeight;
+			actualWidth = (int)Math.round(actualHeight * imageRatio);
+			
+		}
+		
+		Image newImg = img.getScaledInstance(actualWidth, actualHeight,
+				Image.SCALE_SMOOTH);
+		ImageIcon image1 = new ImageIcon(newImg);
+		return image1;
+	}
+	
+	/**
+	 * Gets the image icon loaded on this image panel.
+	 * @return The image icon on this image panel
+	 */
+	public ImageIcon getImageIcon() 
+	{
+		return image;
+		
+	}
+	
+	/**
+	 * Postrerizes an image given a path.
+	 * @return The resulting image.
+	 */
+	public BufferedImage posterize()
+	{
+		File in = new File(imagePath);
+		BufferedImage image;
+		try {
+			image = ImageIO.read(in);
+		} catch(Exception e) {
+			System.out.println("File not found");
+			return null;
+			
+		}
+
+		BufferedImage newImage = new BufferedImage(
+		    image.getWidth(), image.getHeight(), BufferedImage.TYPE_3BYTE_BGR);
+		
+		int[][] pixels;
+		pixels = ImageDriver.getPixels(image);
+		ArrayList<MunsellColor> palette = PalettePanel.getPalette();
+		if (palette == null) {
+			return null;
+		}
+		int[] paletteColors = new int[palette.size()];
+		
+		for (int i = 0; i < palette.size(); i++)
+		{
+			Color temp = ColorTable.munsellToRGB(palette.get(i));
+			paletteColors[i] = temp.getRGB();
+		}
+		double minDist = 500.0;
+		// pci - palette color index - index of the closest palette color
+		int pci = -1;
+		for (int i = 0; i < image.getHeight(); i++)
+		{
+			for (int j = 0; j < image.getWidth(); j++)
+			{
+				for (int p = 0; p < paletteColors.length; p++)
+				{
+					if (ImageDriver.getDistance(pixels[i][j], paletteColors[p]) < minDist)
+					{
+						minDist = ImageDriver.getDistance(pixels[i][j], paletteColors[p]);
+						pci = p;
+					}
+				}
+				newImage.setRGB(j,  i,  paletteColors[pci]);
+				minDist = 500;
+			}
+		}
+		return newImage;
+	}
+}
